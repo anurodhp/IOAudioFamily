@@ -25,7 +25,6 @@
 #include "IOAudioStream.h"
 #include "IOAudioTypes.h"
 
-#include <vecLib/vecLib.h>																							// <rdar://14058728>
 
 IOReturn IOAudioEngine::mixOutputSamples(const void *sourceBuf, void *mixBuf, UInt32 firstSampleFrame, UInt32 numSampleFrames, const IOAudioStreamFormat *streamFormat, IOAudioStream *audioStream)
 {
@@ -47,7 +46,12 @@ IOReturn IOAudioEngine::mixOutputSamples(const void *sourceBuf, void *mixBuf, UI
 		
 		__darwin_ptrdiff_t strideOne=1, strideTwo=1, resultStride=1;
 		
-		vDSP_vadd(floatSource1Buf, strideOne, floatSource2Buf, strideTwo, floatMixBuf, resultStride, numSamps);
+		// vDSP_vadd (vecLib is userland-only, absent from the kernel SDK) with
+		// unit strides is exactly resultBuf[i] = source1[i] + source2[i]; the
+		// output may alias source2 (floatMixBuf == floatSource2Buf), which
+		// element-wise in-order addition handles.
+		for (__darwin_size_t i = 0; i < numSamps; i++)
+			floatMixBuf[i * resultStride] = floatSource1Buf[i * strideOne] + floatSource2Buf[i * strideTwo];
 		
         result = kIOReturnSuccess;
     }
